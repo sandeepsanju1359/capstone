@@ -1,0 +1,7 @@
+.IndiaMap {
+    height: 400px;
+    width: 600px;
+    padding: 10px;
+    background-color: #61dafb;
+    z-index: -1;
+}
