@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, {useEffect, useState} from 'react';
+import india from './States/india.png'
 import ap from './States/andhrapradesh.png'
 import ar from './States/arunachalpradesh.png'
 import as from './States/assam.png'
@@ -28,6 +29,9 @@ import tr from './States/tripura.png'
 import up from './States/uttarpradesh.png'
 import uk from './States/uttarakhand.png'
 import wb from './States/westbengal.png'
+import Papa from 'papaparse';
+import {csvString} from "../Information/data";
+import "./StateCityDropdowns.css"
 
 
 const states = [
@@ -117,108 +121,279 @@ const citiesByState = {
     ,
 };
 
+const parseCSV = (csvString) => {
+    return new Promise((resolve, reject) => {
+        Papa.parse(csvString, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                resolve(results.data);
+            },
+            error: (err) => {
+                reject(err);
+            },
+        });
+    });
+};
+
+const crimeNames = [
+    "Murder",
+    "Rape",
+    "KIDNAPPING & ABDUCTION",
+    "DACOITY",
+    "ROBBERY",
+    "BURGLARY",
+    "THEFT",
+    "RIOTS",
+    "CHEATING",
+    "COUNTERFIETING",
+    "ARSON",
+    "HURT/GREVIOUS HURT",
+    "DOWRY DEATHS",
+    "ASSAULT ON WOMEN WITH INTENT TO OUTRAGE HER MODESTY",
+    "INSULT TO MODESTY OF WOMEN",
+    "CRUELTY BY HUSBAND OR HIS RELATIVES",
+    "IMPORTATION OF GIRLS FROM FOREIGN COUNTRIES",
+    "CAUSING DEATH BY NEGLIGENCE",
+];
+
+
+
 function StateCityDropdowns() {
     const [selectedState, setSelectedState] = useState('');
     const [selectedCity, setSelectedCity] = useState('');
     const [selectedStateImage, setSelectedStateImage] = useState(null);
 
+    const [csvData, setCsvData] = useState([]);
+
+    useEffect(() => {
+        const parseData = async () => {
+            try {
+                const data = await parseCSV(csvString);
+                setCsvData(data);
+            } catch (err) {
+                console.error('Error parsing CSV string:', err);
+            }
+        };
+
+        parseData();
+    }, []);
+
+    const displaySelectedStateData = () => {
+        if (!selectedState) {
+            return null;
+        }
+
+        const stateData = csvData.filter((row) => row.STATE === selectedState);
+        const headers = stateData.length > 0 ? Object.keys(stateData[0]).filter((header) => header !== "STATE") : [];
+
+        return (
+            <div>
+                <h2>District wise Crimes of {selectedState} :</h2>
+                <table>
+                    <thead>
+                    <tr>
+                        {/*{stateData.length > 0 &&*/}
+                        {/*    Object.keys(stateData[0]).map((header, index) => (*/}
+                        {/*        <th key={index}>{header}</th>*/}
+                        {/*    ))}*/}
+                        {headers.map((header, index) => (
+                            <th key={index}>{header}</th>
+                        ))}
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {/*{stateData.map((row, index) => (*/}
+                    {/*    <tr key={index}>*/}
+                    {/*        {Object.values(row).map((value, index) => (*/}
+                    {/*            <td key={index}>{value}</td>*/}
+                    {/*        ))}*/}
+                    {/*    </tr>*/}
+                    {/*))}*/}
+                    {stateData.map((row, index) => (
+                        <tr key={index}>
+                            {headers.map((columnName, columnIndex) => (
+                                <td key={columnIndex}>{row[columnName]}</td>
+                            ))}
+                        </tr>
+                    ))}
+                    </tbody>
+                </table>
+            </div>
+        );
+    };
+
+    const getCrimeTotals = () => {
+        if (!selectedState || !csvData.length) {
+            return [];
+        }
+
+        const stateData = csvData.filter((row) => row.STATE === selectedState);
+        const crimeTotals = crimeNames.map((crimeName) => {
+            const crimeTotal = stateData.reduce((sum, row) => sum + parseInt(row[crimeName]), 0);
+            return { crimeName, crimeTotal };
+        });
+
+        return crimeTotals;
+    };
+    const getTopCrimesWithPercentage = () => {
+        const crimeTotals = getCrimeTotals();
+        if (crimeTotals.length === 0) return [];
+
+        const total = crimeTotals.reduce((acc, curr) => acc + curr.crimeTotal, 0);
+
+        return crimeTotals
+            .sort((a, b) => b.crimeTotal - a.crimeTotal)
+            .slice(0, 3)
+            .map((crime) => ({
+                name: crime.crimeName,
+                total: crime.crimeTotal,
+                percentage: ((crime.crimeTotal / total) * 100).toFixed(2),
+            }));
+    };
+
+    const getAverageCrimeValue = () => {
+        if (!selectedState || !csvData.length) {
+            return 0;
+        }
+
+        const stateData = csvData.filter((row) => row.STATE === selectedState);
+        const totalCrimes = crimeNames.reduce(
+            (sum, crimeName) =>
+                sum +
+                stateData.reduce(
+                    (crimeSum, row) => crimeSum + parseInt(row[crimeName]),
+                    0
+                ),
+            0
+        );
+
+        const averageCrimeValue = totalCrimes / (stateData.length * crimeNames.length);
+        return averageCrimeValue;
+    };
+
+    const getBackgroundColor = () => {
+        const crimeTotals = getCrimeTotals();
+        const totalCrimes = crimeTotals.reduce((sum, crime) => sum + crime.crimeTotal, 0);
+        const selectedStateTotal = crimeTotals.find((crime) => crime.crimeName === "Total").crimeTotal;
+        const selectedStatePercentage = Math.round((selectedStateTotal / totalCrimes) * 100);
+
+        // Shade of red based on the selected state's percentage of total crimes
+        if (selectedStatePercentage >= 10) {
+            return "#c70000";
+        } else if (selectedStatePercentage >= 5) {
+            return "#f03c3c";
+        } else if (selectedStatePercentage >= 3) {
+            return "#ff6666";
+        } else if (selectedStatePercentage >= 1) {
+            return "#ffb3b3";
+        } else {
+            return "#ffe6e6";
+        }
+    };
+
     const handleStateChange = (event) => {
         setSelectedState(event.target.value);
         setSelectedCity('');
-        setSelectedStateImage(null);
+        const selectedStateObj = states.find(
+            (state) => state.name === event.target.value
+        );
+        setSelectedStateImage(india);
 
         // Set the image corresponding to the selected state
-        switch(event.target.value) {
-            case 'AP':
-                setSelectedStateImage(ap);
-                break;
-            case 'AR':
-                setSelectedStateImage(ar);
-                break;
-            case 'AS':
-                setSelectedStateImage(as);
-                break;
-            case 'BR':
-                setSelectedStateImage(br);
-                break;
-            case 'CT':
-                setSelectedStateImage(ct);
-                break;
-            case 'GA':
-                setSelectedStateImage(ga);
-                break;
-            case 'GJ':
-                setSelectedStateImage(gj);
-                break;
-            case 'HR':
-                setSelectedStateImage(hr);
-                break;
-            case 'HP':
-                setSelectedStateImage(hp);
-                break;
-            case 'JK':
-                setSelectedStateImage(jk);
-                break;
-            case 'JH':
-                setSelectedStateImage(jh);
-                break;
-            case 'KA':
-                setSelectedStateImage(ka);
-                break;
-            case 'KL':
-                setSelectedStateImage(kl);
-                break;
-            case 'MP':
-                setSelectedStateImage(mp);
-                break;
-            case 'MH':
-                setSelectedStateImage(mh);
-                break;
-            case 'MN':
-                setSelectedStateImage(mn);
-                break;
-            case 'ML':
-                setSelectedStateImage(ml);
-                break;
-            case 'MZ':
-                setSelectedStateImage(mz);
-                break;
-            case 'NL':
-                setSelectedStateImage(nl);
-                break;
-            case 'OD':
-                setSelectedStateImage(od);
-                break;
-            case 'PB':
-                setSelectedStateImage(pb);
-                break;
-            case 'RJ':
-                setSelectedStateImage(rj);
-                break;
-            case 'SK':
-                setSelectedStateImage(sk);
-                break;
-            case 'TN':
-                setSelectedStateImage(tn);
-                break;
-            case 'TS':
-                setSelectedStateImage(ts);
-                break;
-            case 'TR':
-                setSelectedStateImage(tr);
-                break;
-            case 'UP':
-                setSelectedStateImage(up);
-                break;
-            case 'UK':
-                setSelectedStateImage(uk);
-                break;
-            case 'WB':
-                setSelectedStateImage(wb);
-                break;
-            default:
-                setSelectedStateImage('');
-        }
+       if(selectedStateObj){
+           switch (selectedStateObj.code) {
+               case 'AP':
+                   setSelectedStateImage(ap);
+                   break;
+               case 'AR':
+                   setSelectedStateImage(ar);
+                   break;
+               case 'AS':
+                   setSelectedStateImage(as);
+                   break;
+               case 'BR':
+                   setSelectedStateImage(br);
+                   break;
+               case 'CT':
+                   setSelectedStateImage(ct);
+                   break;
+               case 'GA':
+                   setSelectedStateImage(ga);
+                   break;
+               case 'GJ':
+                   setSelectedStateImage(gj);
+                   break;
+               case 'HR':
+                   setSelectedStateImage(hr);
+                   break;
+               case 'HP':
+                   setSelectedStateImage(hp);
+                   break;
+               case 'JK':
+                   setSelectedStateImage(jk);
+                   break;
+               case 'JH':
+                   setSelectedStateImage(jh);
+                   break;
+               case 'KA':
+                   setSelectedStateImage(ka);
+                   break;
+               case 'KL':
+                   setSelectedStateImage(kl);
+                   break;
+               case 'MP':
+                   setSelectedStateImage(mp);
+                   break;
+               case 'MH':
+                   setSelectedStateImage(mh);
+                   break;
+               case 'MN':
+                   setSelectedStateImage(mn);
+                   break;
+               case 'ML':
+                   setSelectedStateImage(ml);
+                   break;
+               case 'MZ':
+                   setSelectedStateImage(mz);
+                   break;
+               case 'NL':
+                   setSelectedStateImage(nl);
+                   break;
+               case 'OD':
+                   setSelectedStateImage(od);
+                   break;
+               case 'PB':
+                   setSelectedStateImage(pb);
+                   break;
+               case 'RJ':
+                   setSelectedStateImage(rj);
+                   break;
+               case 'SK':
+                   setSelectedStateImage(sk);
+                   break;
+               case 'TN':
+                   setSelectedStateImage(tn);
+                   break;
+               case 'TS':
+                   setSelectedStateImage(ts);
+                   break;
+               case 'TR':
+                   setSelectedStateImage(tr);
+                   break;
+               case 'UP':
+                   setSelectedStateImage(up);
+                   break;
+               case 'UK':
+                   setSelectedStateImage(uk);
+                   break;
+               case 'WB':
+                   setSelectedStateImage(wb);
+                   break;
+               default:
+                   setSelectedStateImage(india);
+           }
+       }
 
     };
 
@@ -230,19 +405,60 @@ function StateCityDropdowns() {
         <div>
             <select value={selectedState} onChange={handleStateChange}>
                 <option value="">Select a state</option>
-                {states.map(state => (
-                    <option key={state.code} value={state.code}>{state.name}</option>
+                {states.map((state) => (
+                    <option key={state.code} value={state.name}>
+                        {state.name}
+                    </option>
                 ))}
             </select>
-            <br/>
+            <br />
+            {selectedState && (
+                <div className="Details">
+                    <p>
+                        {selectedStateImage ? (
+                            <img
+                                src={selectedStateImage}
+                                alt={selectedState}
+                                style={{
+                                    height: "50",
+                                    width: "50",
+                                    display: "inline-block",
+                                }}
+                            />
+                        ) : (
+                            <img
+                                src={india}
+                                alt="Default Image"
+                                style={{
+                                    height: "100",
+                                    width: "150",
 
-
-            {selectedStateImage && (
-                <img src={selectedStateImage} alt={selectedState} />
+                                }}
+                            />
+                        )}
+                    </p>
+                    <div>
+                        <h2>Crimes of {selectedState}</h2>
+                        {getCrimeTotals().map(({ crimeName, crimeTotal }, index) => (
+                            <p key={index}>
+                                <span className="crime-name">{crimeName}:</span>{" "}
+                                {crimeTotal}
+                            </p>
+                        ))}
+                    </div>
+                    <h3>Most Committed Crimes</h3>
+                    {getTopCrimesWithPercentage().map((crime, index) => (
+                        <p key={index}>
+                            <strong>{crime.name}:</strong> {crime.total} (
+                            {crime.percentage}%)
+                        </p>
+                    ))}
+                </div>
             )}
 
-
+            {displaySelectedStateData()}
         </div>
+
     );
 }
 

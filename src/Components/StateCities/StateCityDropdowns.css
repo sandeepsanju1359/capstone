@@ -1,0 +1,10 @@
+.Details{
+    display: flex;
+    align-items: center;
+}
+
+.crime-name {
+    font-weight: bold;
+    display: inline-block;
+    width: 400px;
+}
